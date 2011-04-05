@@ -1,4 +1,4 @@
-// Copyright (C) 2011 Michael Spang
+/* Copyright (C) 2011 Michael Spang */
 
 #include <linux/module.h>
 #include <linux/version.h>
@@ -13,11 +13,13 @@
 
 static struct inode *mntfs_iget(struct super_block *sb, unsigned long ino);
 
-static int mnt_inode(struct vfsmount *mnt) {
+static int mnt_inode(struct vfsmount *mnt)
+{
 	return mnt->mnt_id + 1000;
 }
 
-static int mntfs_dentry_delete(const struct dentry *dentry) {
+static int mntfs_dentry_delete(const struct dentry *dentry)
+{
 	return 1;
 }
 
@@ -25,7 +27,8 @@ static const struct dentry_operations mntfs_dentry_operations = {
 	.d_delete = mntfs_dentry_delete,
 };
 
-static struct vfsmount *find_mount_by_id(int id) {
+static struct vfsmount *find_mount_by_id(int id)
+{
 	struct nsproxy *nsp = NULL;
 	struct mnt_namespace *ns = NULL;
 	struct vfsmount *mnt;
@@ -36,7 +39,7 @@ static struct vfsmount *find_mount_by_id(int id) {
 	if (!ns)
 		return ERR_PTR(-ENOENT);
 
-	// racy
+	/* racy */
 	list_for_each_entry(mnt, &ns->list, mnt_list) {
 		if (mnt->mnt_id == id) {
 			mntget(mnt);
@@ -47,12 +50,13 @@ static struct vfsmount *find_mount_by_id(int id) {
 	return ERR_PTR(-ENOENT);
 }
 
-static struct vfsmount *find_mount_by_dentry(struct dentry *dentry) {
+static struct vfsmount *find_mount_by_dentry(struct dentry *dentry)
+{
 	struct vfsmount *mnt;
 	unsigned long id;
 
-        if (dentry->d_name.len > NAME_MAX)
-                return ERR_PTR(-ENAMETOOLONG);
+	if (dentry->d_name.len > NAME_MAX)
+		return ERR_PTR(-ENAMETOOLONG);
 
 	if (dentry->d_name.name[0] == '0' && dentry->d_name.len > 1)
 		return ERR_PTR(-ENOENT);
@@ -67,7 +71,8 @@ static struct vfsmount *find_mount_by_dentry(struct dentry *dentry) {
 	return mnt;
 }
 
-static struct dentry *mntfs_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
+static struct dentry *mntfs_lookup(struct inode *dir, struct dentry *dentry,
+				   struct nameidata *nd)
 {
 	struct inode *inode;
 	struct vfsmount *mnt;
@@ -84,11 +89,12 @@ static struct dentry *mntfs_lookup(struct inode *dir, struct dentry *dentry, str
 }
 
 static const struct inode_operations mntfs_root_inode_operations = {
-        .lookup = mntfs_lookup,
+	.lookup = mntfs_lookup,
 };
 
-static int mntfs_readdir(struct file * filp,
-		          void * dirent, filldir_t filldir) {
+static int mntfs_readdir(struct file *filp,
+			 void *dirent, filldir_t filldir)
+{
 	struct nsproxy *nsp = NULL;
 	struct mnt_namespace *ns = NULL;
 	struct vfsmount *mnt;
@@ -100,12 +106,14 @@ static int mntfs_readdir(struct file * filp,
 	if (!ns)
 		goto out;
 
-	// racy
+	/* racy */
 	list_for_each_entry(mnt, &ns->list, mnt_list) {
 		if (filp->f_pos <= i) {
 			char name[13];
-			int len = snprintf(name, sizeof(name), "%d", mnt->mnt_id);
-			filldir(dirent, name, len, filp->f_pos, mnt_inode(mnt), DT_LNK);
+			int len = snprintf(name, sizeof(name), "%d",
+					   mnt->mnt_id);
+			filldir(dirent, name, len, filp->f_pos,
+				mnt_inode(mnt), DT_LNK);
 			filp->f_pos = i + 1;
 		}
 		i++;
@@ -122,7 +130,8 @@ static const struct file_operations mntfs_root_file_operations = {
 };
 
 static int mntfs_readlink(struct dentry *dentry, char __user *buffer,
-                              int buflen) {
+			  int buflen)
+{
 	struct vfsmount *mnt;
 	struct path path;
 	char *namebuf;
@@ -144,7 +153,7 @@ static int mntfs_readlink(struct dentry *dentry, char __user *buffer,
 	if (IS_ERR(name))
 		goto out_free;
 
-        error = vfs_readlink(dentry, buffer, buflen, name);
+	error = vfs_readlink(dentry, buffer, buflen, name);
 
 out_free:
 	kfree(namebuf);
@@ -153,7 +162,8 @@ out_mntput:
 	return error;
 }
 
-static void *mntfs_follow(struct dentry *dentry, struct nameidata *nd) {
+static void *mntfs_follow(struct dentry *dentry, struct nameidata *nd)
+{
 	struct vfsmount *mnt;
 
 	path_put(&nd->path);
@@ -176,7 +186,8 @@ static const struct inode_operations mntfs_link_inode_operations = {
 	.follow_link = mntfs_follow,
 };
 
-static struct inode *mntfs_iget(struct super_block *sb, unsigned long ino) {
+static struct inode *mntfs_iget(struct super_block *sb, unsigned long ino)
+{
 	struct inode *inode;
 
 	inode = iget_locked(sb, ino);
@@ -185,7 +196,7 @@ static struct inode *mntfs_iget(struct super_block *sb, unsigned long ino) {
 	if (!(inode->i_state & I_NEW))
 		return inode;
 
-        inode->i_nlink = 1;
+	inode->i_nlink = 1;
 	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
 
 	if (ino == 1) {
@@ -205,8 +216,9 @@ static struct super_operations mntfs_super_operations = {
 	.statfs = simple_statfs,
 };
 
-static int mntfs_fill_super(struct super_block *sb, void *data, int silent) {
-        struct inode *root;
+static int mntfs_fill_super(struct super_block *sb, void *data, int silent)
+{
+	struct inode *root;
 
 	sb->s_op = &mntfs_super_operations;
 
@@ -219,27 +231,30 @@ static int mntfs_fill_super(struct super_block *sb, void *data, int silent) {
 	if (!sb->s_root)
 		return -ENOMEM;
 
-        return 0;
+	return 0;
 }
 
 static struct dentry *mntfs_mount(struct file_system_type *fs_type,
-		int flags, const char *dev_name, void *data) {
+		int flags, const char *dev_name, void *data)
+{
 	return mount_nodev(fs_type, flags, data, mntfs_fill_super);
 }
 
 static struct file_system_type mntfs_type = {
-        .name = "mntfs",
-        .mount = mntfs_mount,
-        .kill_sb = kill_anon_super,
-        .owner = THIS_MODULE,
+	.name = "mntfs",
+	.mount = mntfs_mount,
+	.kill_sb = kill_anon_super,
+	.owner = THIS_MODULE,
 };
 
-static int __init mntfs_init(void) {
+static int __init mntfs_init(void)
+{
 	register_filesystem(&mntfs_type);
 	return 0;
 }
 
-static void __exit mntfs_exit(void) {
+static void __exit mntfs_exit(void)
+{
 	unregister_filesystem(&mntfs_type);
 }
 
