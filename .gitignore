@@ -1,0 +1,7 @@
+*.o
+*.ko
+.mntfs.*
+mntfs.mod.*
+modules.order
+Module.symvers
+.tmp_versions
